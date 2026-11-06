@@ -1,0 +1,41 @@
+---
+title: Blueprint mod
+---
+flowchart LR
+  files[Diagram files<br/>blueprint/*.mmd · topic.txt]
+  store[Storage<br/>store.js]
+  view[Blueprint view<br/>main.js]
+  parse[Mermaid parser<br/>mermaid.js]
+  tree[Subsystem links<br/>tree.js]
+  render[Rendering<br/>layout.js · main.js]
+  requests[Agent requests<br/>prompts · hc send]
+  setup[Tab bar button<br/>setup.js]
+  update[Update check<br/>update.js]
+
+  files -->|read · watched| store
+  store -->|diagrams| view
+  view --> parse
+  parse --> tree
+  parse --> render
+  tree -->|tabs · trail| view
+  view -->|box · note| requests
+  requests -.->|agent saves| files
+  view --> setup
+  view --> update
+
+  %% code: files mods/blueprint/store.js:60
+  %% code: store mods/blueprint/store.js:145
+  %% code: view mods/blueprint/main.js:263
+  %% code: parse mods/blueprint/mermaid.js:45
+  %% code: tree mods/blueprint/tree.js:19
+  %% code: render mods/blueprint/main.js:1735
+  %% code: requests mods/blueprint/main.js:1178
+  %% code: setup mods/blueprint/setup.js:72
+  %% code: update mods/blueprint/update.js:40
+
+  %% subsystem: store storage.mmd
+  %% subsystem: tree subsystems.mmd
+  %% subsystem: render rendering.mmd
+  %% subsystem: requests requests.mmd
+
+  class files,store,tree,requests,update done

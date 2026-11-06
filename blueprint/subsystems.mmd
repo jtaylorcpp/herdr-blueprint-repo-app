@@ -1,0 +1,38 @@
+---
+title: Subsystem links
+---
+flowchart LR
+  parse[parseFlowchart<br/>subsystem lines · click .mmd]
+  file[diagramFile<br/>name.mmd]
+  build[buildTree<br/>roots · tab order · parents]
+  trail[trail<br/>root down to the file]
+  tabs[tabs<br/>one per file, tree order]
+  crumbs[crumbs<br/>System › Auth]
+  badge[node badge<br/>stacked card]
+  open[openSub · up<br/>double-click · Enter · Backspace]
+  split[openSplit<br/>B · layers button]
+  prompt[splitPrompt<br/>index.mmd as the root]
+
+  parse --> file
+  file --> build
+  build --> tabs
+  build --> trail
+  trail --> crumbs
+  build --> badge
+  badge --> open
+  crumbs --> open
+  split --> prompt
+  build --> prompt
+
+  %% code: parse mods/blueprint/mermaid.js:45
+  %% code: file mods/blueprint/mermaid.js:91
+  %% code: build mods/blueprint/tree.js:19
+  %% code: trail mods/blueprint/tree.js:53
+  %% code: tabs mods/blueprint/main.js:1484
+  %% code: crumbs mods/blueprint/main.js:1612
+  %% code: badge mods/blueprint/main.js:1952
+  %% code: open mods/blueprint/main.js:640
+  %% code: split mods/blueprint/main.js:1158
+  %% code: prompt mods/blueprint/main.js:238
+
+  class parse,file,build,trail,tabs,crumbs,badge,open,split,prompt done

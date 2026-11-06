@@ -1,0 +1,41 @@
+---
+title: Agent requests
+---
+flowchart LR
+  connect[connect<br/>agent picked in the empty card]
+  send[send<br/>Enter in the request box]
+  draw[drawPrompt<br/>draw into blueprint/]
+  point[pointPrompt<br/>In Blueprint I pointed at]
+  fresh[newPrompt<br/>+ another diagram]
+  split[splitPrompt<br/>break into subsystems]
+  rules[diagramRules<br/>title · code · class · subsystem]
+  hc[hc send<br/>the agent's terminal]
+  ask[askUpdate<br/>Update button]
+  upd[updatePrompt<br/>files from the fork]
+
+  connect --> draw
+  send --> point
+  send --> fresh
+  send --> split
+  draw --> rules
+  fresh --> rules
+  split --> rules
+  draw --> hc
+  point --> hc
+  fresh --> hc
+  split --> hc
+  ask --> upd
+  upd --> hc
+
+  %% code: connect mods/blueprint/main.js:673
+  %% code: send mods/blueprint/main.js:1178
+  %% code: draw mods/blueprint/main.js:217
+  %% code: point mods/blueprint/main.js:184
+  %% code: fresh mods/blueprint/main.js:226
+  %% code: split mods/blueprint/main.js:238
+  %% code: rules mods/blueprint/main.js:207
+  %% code: hc mods/blueprint/main.js:1204
+  %% code: ask mods/blueprint/main.js:1074
+  %% code: upd mods/blueprint/update.js:68
+
+  class connect,send,draw,split,rules,upd done

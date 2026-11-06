@@ -1,0 +1,28 @@
+---
+title: Rendering
+---
+flowchart LR
+  prep[prepare<br/>next layout, between frames]
+  pump[pump<br/>12 ms slices]
+  steps[layoutSteps<br/>layered layout]
+  body[renderBody<br/>header · tabs · canvas · footer]
+  canvas[canvas<br/>pan · zoom · trail]
+  drawing[drawing<br/>grid · edges · running dots]
+  node[node<br/>shape · status · subsystem badge]
+
+  prep --> pump
+  pump --> steps
+  body --> canvas
+  canvas --> drawing
+  drawing --> node
+  steps -->|layout cache| drawing
+
+  %% code: prep mods/blueprint/main.js:818
+  %% code: pump mods/blueprint/main.js:843
+  %% code: steps mods/blueprint/layout.js:29
+  %% code: body mods/blueprint/main.js:1335
+  %% code: canvas mods/blueprint/main.js:1526
+  %% code: drawing mods/blueprint/main.js:1735
+  %% code: node mods/blueprint/main.js:1952
+
+  class canvas,node done

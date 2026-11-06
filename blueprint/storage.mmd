@@ -1,0 +1,39 @@
+---
+title: Diagram storage
+---
+flowchart LR
+  open[openProject<br/>the tab's terminal folder]
+  checkout[checkoutOf<br/>git rev-parse --show-toplevel]
+  ddir[diagramDir<br/>checkout/blueprint]
+  sdir[stateDir<br/>app folder, per project]
+  look[lookForFolder<br/>every 3 s until the agent makes it]
+  watch[watch<br/>watchFolder on blueprint/]
+  poll[poll<br/>every 5 s]
+  load[load<br/>*.mmd and when each changed]
+  meta[project.json<br/>agent · asked · file times]
+  prune[pruneAll<br/>records of gone projects]
+
+  open --> checkout
+  checkout --> ddir
+  checkout --> sdir
+  ddir --> look
+  look --> watch
+  watch --> load
+  poll --> load
+  poll -->|rereadMeta| meta
+  load -->|updateMeta| meta
+  sdir --> meta
+  prune --> meta
+
+  %% code: open mods/blueprint/main.js:422
+  %% code: checkout mods/blueprint/store.js:40
+  %% code: ddir mods/blueprint/store.js:60
+  %% code: sdir mods/blueprint/store.js:63
+  %% code: look mods/blueprint/main.js:404
+  %% code: watch mods/blueprint/main.js:505
+  %% code: poll mods/blueprint/main.js:532
+  %% code: load mods/blueprint/store.js:145
+  %% code: meta mods/blueprint/store.js:92
+  %% code: prune mods/blueprint/store.js:159
+
+  class open,checkout,ddir,sdir,look,watch,poll,load,meta,prune done
