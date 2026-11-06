@@ -4,9 +4,11 @@
 import { registerHooks } from "node:module";
 
 const STUB = new URL("./herdr-stub.mjs", import.meta.url).href;
+const FS = new URL("./fs-stub.mjs", import.meta.url).href;
 registerHooks({
   resolve(spec, ctx, next) {
     if (spec === "gpui-kit" || spec === "gpui-base" || spec === "herdr") return { url: STUB, shortCircuit: true }; // one instance, so tests share its state
+    if (spec === "fs/promises") return { url: FS, shortCircuit: true }; // the mods' bare name; tests use node:fs
     return next(spec, ctx);
   },
 });

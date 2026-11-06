@@ -48,7 +48,7 @@ globalThis.window = { paint_path: (path, color) => Object.assign(el("path"), { p
 export const settings = () => state.settings;
 const none = () => null, list = () => [];
 export const theme = () => ({}), agents = list, panes = list, spaces = list, focused = none, props = () => ({}), knownAgents = list;
-export const exec = async () => ({ code: 0, stdout: "", stderr: "" }), run = none, home = () => "/tmp", appHome = () => "/tmp";
+export const exec = async () => ({ code: 0, stdout: "", stderr: "" }), run = none, home = () => "/tmp", appHome = () => state.appHome ?? "/tmp";
 // hc send is recorded in state.sent; shared state lives in state.shared; files in state.files.
 export const hc = async (args) => ((state.sent ??= []).push(args), { code: 0, stdout: "", stderr: "" });
 export const notify = (n) => ((state.notes ??= []).push(n), null), writeTextFile = async () => {}, nextCommand = none;

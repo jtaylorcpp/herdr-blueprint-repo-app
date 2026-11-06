@@ -119,7 +119,7 @@ test("the refresh button reads the files again and keeps the view", async () => 
     const { bp, cx, run, settle, canvas } = blueprint("flowchart LR\n  a --> b");
     writeFileSync(join(dir, "big.mmd"), "");
     state.files = { [`${dir}/big.mmd`]: "flowchart LR\n  a --> b --> c" }; // changed on disk
-    bp.project = { path: "/p", dir, known: true, meta: { path: "/p", pinned: [], seen: {}, files: {} } };
+    bp.project = { path: "/p", dir, state: "/state/p", known: true, meta: { path: "/p", agent: null, files: {} } };
     run();
     canvas();
     bp.measured["n:big.mmd@1:a"] = { w: 40, h: 16 };
@@ -153,7 +153,7 @@ test("a diagram that arrives after the list went empty is still laid out", () =>
   bp.setDiagrams([]); // the last file deleted meanwhile
   run();
   assert.notEqual(bp.job, job);
-  bp.setDiagrams([{ file: "new.mmd", src: "flowchart LR\n  p --> q", mtime: Date.now(), pinned: false }]);
+  bp.setDiagrams([{ file: "new.mmd", src: "flowchart LR\n  p --> q", mtime: Date.now() }]);
   bp.redraw(cx);
   run();
   assert.deepEqual(boxes(canvas()).sort(), ["p", "q"]);

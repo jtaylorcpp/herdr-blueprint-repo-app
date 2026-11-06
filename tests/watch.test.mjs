@@ -23,7 +23,7 @@ async function project() {
   Object.assign(bp, {
     graphs: [], tab: 0, revs: 0, measured: {}, vers: {}, whole: new Set(), cache: new Map(), views: {}, dirs: {},
     prev: {}, failed: new Set(), paths: {}, lite: 0, size: null, selected: null, compose: null,
-    project: { path: "/p", dir, known: true, meta: { path: "/p", pinned: [], seen: {}, files: {} } },
+    project: { path: "/p", dir, state: "/state/p", known: true, meta: { path: "/p", agent: null, files: {} } },
   });
   bp.heal = () => {};
   const tasks = [], cx = { notes: 0, notify() { cx.notes++; }, timer: { after() {} }, spawn: (f) => tasks.push(f(cx)) };

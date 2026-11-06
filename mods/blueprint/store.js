@@ -1,17 +1,22 @@
-// Diagrams on disk, one folder per project, inside the app's own data folder so
-// nothing lands in the person's repositories:
+// Diagrams on disk live in the project itself, so they can be committed with
+// the code they draw:
+//
+//   <checkout>/blueprint/
+//     <diagram>.mmd   one Mermaid diagram each: the agent writes, Blueprint reads
+//     topic.txt       the project's main topic, one line, written by the agent
+//
+// Herdr lets a mod write only under its app folder, so Blueprint never writes
+// there: the agent makes the folder and its files, and Blueprint reads them
+// (fs/promises reads only inside the home folder, so the checkout must be in
+// it). Nothing in it is ever deleted by Blueprint. What Blueprint keeps for
+// itself stays in the app folder, one small folder per project:
 //
 //   <app home>/data/blueprint/projects/<name>-<hash>/
-//     <diagram>.mmd   one Mermaid diagram each: the agent writes, Blueprint reads
-//     project.json    { path, agent, asked, pinned: [file], seen: { file: ms }, opened: ms,
-//                       files: { file: { sum, at } } }
-//     topic.txt       the project's main topic, one line, written by the agent
+//     project.json    { path, agent, asked, opened: ms, files: { file: { sum, at } } }
 //
 // A project is a checkout: the git top level of the tab's terminal folder, so
 // every worktree is its own project (its folder stays put while branches come
-// and go), or that folder when it is not in git. Diagrams nobody updated or
-// opened for KEEP_DAYS are deleted unless pinned, and past a day old a project
-// keeps at most KEEP_COUNT unpinned ones.
+// and go), or that folder when it is not in git.
 //
 // More than one Blueprint can have a project open (the panel and a pane), so
 // project.json changes through updateMeta: a change applied to what is on disk
@@ -24,8 +29,8 @@
 import * as fs from "fs/promises";
 import { exec, appHome, readTextFile, writeTextFile } from "herdr";
 
-export const KEEP_DAYS = 7;
-export const KEEP_COUNT = 10;
+export const DIAGRAMS = "blueprint"; // the folder in the checkout
+export const KEEP_DAYS = 7; // for Blueprint's own record of a project, not the diagrams
 const DAY = 86400000;
 
 export const slashes = (p) => p.replace(/\\/g, "/");
@@ -51,7 +56,11 @@ function hash(s) {
   return h.toString(16).padStart(8, "0");
 }
 
-export function projectDir(path) {
+// Where the agent saves a project's diagrams.
+export const diagramDir = (path) => `${path.replace(/\/+$/, "")}/${DIAGRAMS}`;
+
+// Where Blueprint keeps its own record of a project (project.json).
+export function stateDir(path) {
   const name = path.split("/").filter(Boolean).slice(-2).join("-").replace(/[^\w.-]+/g, "_").replace(/^_+/, "") || "root";
   return `${projectsDir()}/${name}-${hash(path)}`;
 }
@@ -69,7 +78,7 @@ function parseMeta(text, path) {
   try {
     saved = text ? JSON.parse(text) : null;
   } catch (_) {}
-  return { path, agent: null, pinned: [], seen: {}, files: {}, opened: 0, ...saved };
+  return { path, agent: null, files: {}, opened: 0, ...saved };
 }
 
 export async function readMeta(dir, path) {
@@ -103,8 +112,8 @@ async function apply(dir, path, change) {
   }
 }
 
-// What changed in a project folder is news when it is a diagram or the topic;
-// the rest (project.json and whatever saving it leaves) is bookkeeping. Herdr
+// What changed in the diagram folder is news when it is a diagram or the
+// topic; anything else there (a README, an editor's swap file) is not. Herdr
 // sends the folder itself when too much changed to list: anything may have
 // (and so may a path not spelled the way dir is).
 export const isNews = (f, dir) => /\.mmd$|topic\.txt$/.test(f) || !slashes(f).startsWith(`${dir}/`);
@@ -129,37 +138,24 @@ async function listed(dir, meta, now) {
   return { list, files };
 }
 
-// The project's diagrams, oldest-touched ones deleted first. Each comes back
-// as { file, mtime, touched, pinned, src }, newest first. New or changed
-// files get their time recorded in project.json (and in meta).
-export async function load(dir, meta, now = Date.now()) {
-  const { list: found, files } = await listed(dir, meta, now);
-  const list = found
-    .map((f) => ({ ...f, touched: Math.max(f.mtime, meta.seen?.[f.file] ?? 0), pinned: meta.pinned.includes(f.file) }))
-    .sort((a, b) => b.touched - a.touched);
-  const keep = [];
-  let unpinned = 0;
-  for (const f of list) {
-    const age = now - f.touched;
-    const kept = f.pinned || age <= DAY || (age <= KEEP_DAYS * DAY && unpinned < KEEP_COUNT);
-    if (!f.pinned) unpinned++;
-    if (kept) keep.push(f);
-    else {
-      await fs.unlink(`${dir}/${f.file}`).catch(() => {});
-      delete files[f.file];
-    }
-  }
+// The project's diagrams in dir, as { file, mtime, src }, most recently
+// changed first. New or changed files get their time recorded in the
+// project.json in state (and in meta). Nothing is deleted: the files are the
+// person's, in their repository.
+export async function load(dir, state, meta, now = Date.now()) {
+  const { list, files } = await listed(dir, meta, now);
+  list.sort((a, b) => b.mtime - a.mtime);
   const before = meta.files ?? {};
   const changed = Object.keys(files).length !== Object.keys(before).length
     || Object.entries(files).some(([f, r]) => before[f]?.sum !== r.sum);
   meta.files = files;
-  if (changed) await updateMeta(dir, meta.path, (m) => (m.files = files)).catch(() => {});
-  return keep;
+  if (changed) await updateMeta(state, meta.path, (m) => (m.files = files)).catch(() => {});
+  return list;
 }
 
-// Every project at once, when Blueprint starts: expired diagrams go, and so
-// does a project folder left with no diagram and not opened or asked to draw
-// for KEEP_DAYS.
+// When Blueprint starts: Blueprint's own record of a project goes once the
+// project has no diagram folder (say, a removed worktree) and was not opened
+// or asked to draw for KEEP_DAYS. The diagrams themselves are never touched.
 export async function pruneAll(now = Date.now()) {
   let names = [];
   try {
@@ -168,12 +164,11 @@ export async function pruneAll(now = Date.now()) {
     return;
   }
   for (const name of names) {
-    const dir = `${projectsDir()}/${name}`;
-    const meta = await readMeta(dir, null);
-    const kept = await load(dir, meta, now);
-    if (kept.length || now - Math.max(meta.opened ?? 0, meta.asked ?? 0) <= KEEP_DAYS * DAY) continue;
-    await fs.unlink(`${dir}/project.json`).catch(() => {});
-    await fs.unlink(`${dir}/topic.txt`).catch(() => {});
-    await fs.rmdir(dir).catch(() => {});
+    const state = `${projectsDir()}/${name}`;
+    const meta = await readMeta(state, null);
+    if (now - Math.max(meta.opened ?? 0, meta.asked ?? 0) <= KEEP_DAYS * DAY) continue;
+    if (meta.path && await hasDir(diagramDir(meta.path))) continue;
+    await fs.unlink(`${state}/project.json`).catch(() => {});
+    await fs.rmdir(state).catch(() => {});
   }
 }
