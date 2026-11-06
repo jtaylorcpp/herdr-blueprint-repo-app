@@ -13,7 +13,7 @@ export default class Bench extends Blueprint {
   init(props, cx) {
     super.init(props, cx);
     this.ctxTab = null; // a pane serving no tab keeps its diagram through the render
-    this.setDiagrams([{ file: "big.mmd", src: P.src, mtime: Date.now(), pinned: false }]);
+    this.setDiagrams([{ file: "big.mmd", src: P.src, mtime: Date.now() }]);
     Object.assign(this, { rawSize: { width: 1200, height: 800 }, size: { width: 1200, height: 800 }, width: 1200, zoom: 1, mono: "Menlo", measuredFont: "Menlo" });
     const r = {};
     if (P.mode !== "cold") {

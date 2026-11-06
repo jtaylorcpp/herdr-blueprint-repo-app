@@ -94,11 +94,19 @@ The Blueprint button (see Install) opens Blueprint as a side panel that follows 
 
 <p align="center"><img src="docs/media/panel.png" width="720" alt="Herdr with Claude Code on the left and Blueprint as a side panel on the right, opened from the Blueprint button next to Files and Changes; the POST /logout tab is pinned."></p>
 
+### 8. Break it into subsystems
+
+The layers button in the header (or `B`) asks the agent to break the diagram on screen into subsystems. Each subsystem gets a file of its own, opened from its box. `blueprint/index.mmd` is the root, the whole system at a glance; if there isn't one yet, the diagram you break up becomes it. With a box picked, `B` breaks down just that box. Any subsystem can be broken down again.
+
+A box that opens a subsystem looks like a small stack of cards with a badge in the corner. Double-click it (or pick it and press Enter) to go in; a trail above the drawing leads back, and Backspace goes up. Every diagram also has a tab, each subsystem right after the diagram that opens it.
+
+In the files it is one line per box, `%% subsystem: auth auth.mmd`, so you can also link diagrams by hand.
+
 ## Good to know
 
 - **Agents.** Claude Code, Codex, Grok, Gemini, OpenCode and other agents Herdr knows. Requests are typed into their terminal with `hc send`.
 - **Language.** English, Korean or Japanese. It follows Claude Code's `language` setting and is English otherwise (Codex, Grok and others have no such setting it reads). Pick one for good with `herdr-app do blueprint.lang-ko` (or `lang-en`, `lang-ja`; `lang-auto` to follow Claude Code again).
-- **Where diagrams live.** `blueprint/` at the git top level of the terminal's folder (so every worktree has its own): one `.mmd` file per diagram and a `topic.txt` for the header. The agent makes the folder and writes the files; Blueprint only reads them and never deletes one. Commit them, or add `blueprint/` to `.gitignore` to keep them local. Blueprint's own notes (the connected agent, when each file changed) stay in `data/blueprint/projects/` in Herdr's app folder. The repo has to be inside your home folder, the only place Herdr lets a mod read a folder.
+- **Where diagrams live.** `blueprint/` at the git top level of the terminal's folder (so every worktree has its own): one `.mmd` file per diagram (`index.mmd` is the root when you break things into subsystems) and a `topic.txt` for the header. The agent makes the folder and writes the files; Blueprint only reads them and never deletes one. Commit them, or add `blueprint/` to `.gitignore` to keep them local. Blueprint's own notes (the connected agent, when each file changed) stay in `data/blueprint/projects/` in Herdr's app folder. The repo has to be inside your home folder, the only place Herdr lets a mod read a folder.
 - **What it runs.** `git rev-parse` to find the project, `hc send` to reach the agent, and `sips` and `osascript` for PNG export on macOS. It reads `~/.claude/settings.json` for the language. The only network use is the update check below.
 - **Updates.** Once a day Blueprint reads the version in this repository's `mods/blueprint/mod.json` on GitHub. When it is newer than yours, a small Update button shows in the header (the version is in its tooltip); a click asks the tab's agent to update the mod and tell you what changed. `herdr-app do blueprint.update-check-off` stops the check.
 - **Platforms.** Written for macOS, Linux and Windows with no shell, Python or Node. It has been run on macOS (Herdr 0.1.10); Windows and Linux are not tested yet. PNG export is macOS only.

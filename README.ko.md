@@ -86,11 +86,19 @@ Blueprint 버튼(설치 참고)을 누르면 지금 보고 있는 탭을 따라�
 
 <p align="center"><img src="docs/media/panel.png" width="720" alt="왼쪽에 Claude Code, 오른쪽에 Files, Changes 옆 Blueprint 버튼으로 연 사이드 패널. POST /logout 탭이 고정돼 있습니다."></p>
 
+### 8. 하위 시스템으로 나누기
+
+헤더의 레이어 버튼(또는 `B`)을 누르면 에이전트가 지금 보이는 다이어그램을 하위 시스템으로 나눕니다. 하위 시스템마다 파일이 하나씩 생기고, 그 박스에서 열립니다. 루트는 시스템 전체를 한눈에 보여 주는 `blueprint/index.mmd`이고, 아직 없으면 나누는 다이어그램이 루트가 됩니다. 박스를 고른 채로 `B`를 누르면 그 박스 하나만 나눕니다. 하위 시스템도 같은 식으로 다시 나눌 수 있습니다.
+
+하위 시스템을 여는 박스는 카드가 겹친 모양이고 모서리에 배지가 붙습니다. 더블클릭하거나(또는 고르고 Enter) 들어가면 그림 위에 돌아갈 경로가 보이고, Backspace로 한 단계 위로 갑니다. 다이어그램마다 탭도 있고, 하위 시스템 탭은 그것을 여는 다이어그램 바로 뒤에 옵니다.
+
+파일에서는 박스마다 `%% subsystem: auth auth.mmd` 한 줄이라, 직접 이어 줄 수도 있습니다.
+
 ## 알아 둘 것
 
 - **에이전트.** Claude Code, Codex, Grok, Gemini, OpenCode 등 Herdr가 아는 에이전트. 요청은 `hc send`로 에이전트 터미널에 입력합니다.
 - **언어.** 영어, 한국어, 일본어. Claude Code의 `language` 설정을 따르고, 없으면 영어입니다(Codex, Grok 등은 Blueprint가 읽는 언어 설정이 없습니다). `herdr-app do blueprint.lang-ko`(또는 `lang-en`, `lang-ja`)로 고정할 수 있고, `lang-auto`로 다시 Claude Code 설정을 따릅니다.
-- **저장 위치.** 터미널 폴더의 git 최상위 폴더에 있는 `blueprint/`(worktree마다 따로). 다이어그램 하나가 `.mmd` 파일 하나이고, 헤더에 보이는 주제는 `topic.txt`에 적힙니다. 폴더와 파일은 에이전트가 만들고, Blueprint는 읽기만 할 뿐 지우지 않습니다. 커밋해도 되고, 로컬에만 두려면 `blueprint/`를 `.gitignore`에 넣으세요. Blueprint가 따로 적어 두는 것(연결한 에이전트, 파일마다 바뀐 시각)은 Herdr 앱 폴더의 `data/blueprint/projects/`에 남습니다. Herdr는 mod가 홈 폴더 안의 폴더만 읽게 하므로 저장소가 홈 폴더 안에 있어야 합니다.
+- **저장 위치.** 터미널 폴더의 git 최상위 폴더에 있는 `blueprint/`(worktree마다 따로). 다이어그램 하나가 `.mmd` 파일 하나이고(하위 시스템으로 나누면 `index.mmd`가 루트), 헤더에 보이는 주제는 `topic.txt`에 적힙니다. 폴더와 파일은 에이전트가 만들고, Blueprint는 읽기만 할 뿐 지우지 않습니다. 커밋해도 되고, 로컬에만 두려면 `blueprint/`를 `.gitignore`에 넣으세요. Blueprint가 따로 적어 두는 것(연결한 에이전트, 파일마다 바뀐 시각)은 Herdr 앱 폴더의 `data/blueprint/projects/`에 남습니다. Herdr는 mod가 홈 폴더 안의 폴더만 읽게 하므로 저장소가 홈 폴더 안에 있어야 합니다.
 - **실행하는 것.** 프로젝트를 찾는 `git rev-parse`, 에이전트에게 입력하는 `hc send`, macOS에서 PNG를 만드는 `sips`와 `osascript`. 언어 설정 때문에 `~/.claude/settings.json`을 읽습니다. 네트워크는 아래 업데이트 확인에만 씁니다.
 - **업데이트.** 하루 한 번 GitHub에 있는 이 저장소의 `mods/blueprint/mod.json`에서 버전을 읽습니다. 설치한 것보다 새 버전이면 헤더에 작은 "Update" 버튼이 나타나고(버전은 툴팁에), 누르면 그 탭의 에이전트에게 mod 업데이트와 바뀐 점 설명을 맡깁니다. `herdr-app do blueprint.update-check-off`로 끌 수 있습니다.
 - **지원 환경.** 셸, Python, Node 없이 macOS, Linux, Windows에서 돌도록 만들었습니다. 실제로 돌려 본 곳은 macOS(Herdr 0.1.10)뿐이고 Windows와 Linux는 아직 확인하지 못했습니다. PNG 내보내기는 macOS에서만 됩니다.

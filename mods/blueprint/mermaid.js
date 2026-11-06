@@ -4,8 +4,10 @@
 //         "Title<br/>subtitle" splits into title and sub.
 // Edges:  -->  ---  -.->  -.-  ==>   with |label|, or "-- label -->" / "-. label .->".
 // Blueprint extras stay plain Mermaid: "class a,b done|active|current", the code a
-// box stands for as `%% code: id path:line` (or click id "path:line"), and a
-// frontmatter title. Each node keeps the line it is written on (1-based, in src).
+// box stands for as `%% code: id path:line` (or click id "path:line"), the
+// subsystem diagram it opens as `%% subsystem: id file.mmd` (or click id
+// "file.mmd"; see tree.js), and a frontmatter title. Each node keeps the line it
+// is written on (1-based, in src).
 
 const SHAPES = [
   ["([", "])", "stadium"],
@@ -59,6 +61,10 @@ export function parseFlowchart(src) {
       node(g, m[1]).ref = m[2];
       continue;
     }
+    if ((m = line.match(/^%%\s*subsystem:\s*(\w+)\s+(\S+)\s*$/))) {
+      node(g, m[1]).system = diagramFile(m[2]);
+      continue;
+    }
     if (!line || line.startsWith("%%")) continue;
     // The header; with no direction Mermaid draws top to bottom.
     if ((m = line.match(/^(?:flowchart|graph)(?:\s+(LR|RL|TB|TD|BT)\b.*|\s*)$/))) {
@@ -70,7 +76,8 @@ export function parseFlowchart(src) {
       continue;
     }
     if ((m = line.match(/^click\s+(\w+)\s+(?:href\s+)?"([^"]+)"/))) {
-      node(g, m[1]).ref = m[2];
+      if (/\.mmd$/.test(m[2])) node(g, m[1]).system = diagramFile(m[2]);
+      else node(g, m[1]).ref = m[2];
       continue;
     }
     if (/^(classDef|style|linkStyle|subgraph|end|direction)\b/.test(line)) continue;
@@ -79,10 +86,17 @@ export function parseFlowchart(src) {
   return g;
 }
 
+// A subsystem's file as Blueprint lists it: the name alone (they all sit in
+// blueprint/), with .mmd. "./auth", "blueprint/auth.mmd" and "auth.mmd" are one.
+export const diagramFile = (s) => {
+  const name = unquote(s).split(/[\\/]/).pop();
+  return /\.mmd$/.test(name) ? name : `${name}.mmd`;
+};
+
 function node(g, id) {
   let n = g.nodes.get(id);
   if (!n) {
-    n = { id, shape: "rect", title: id, sub: null, status: null, ref: null, line: null, lineText: null };
+    n = { id, shape: "rect", title: id, sub: null, status: null, ref: null, system: null, line: null, lineText: null };
     g.nodes.set(id, n);
   }
   return n;

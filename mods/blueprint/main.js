@@ -21,15 +21,22 @@
 // when the agent saves it. With none yet, it offers the agents in the tab;
 // picking one connects it and asks it to draw.
 //
+// Subsystems (see tree.js): a box can open a diagram of its own, and
+// index.mmd is the root. Every diagram has a tab, in tree order; a subsystem
+// also opens from its box (double-click, or Enter on the picked one), with a
+// trail back up above the drawing (Backspace goes up). B asks the agent to
+// break the shown diagram, or the picked box, into subsystems.
+//
 // Commands (keys.json or `herdr-app do blueprint.<name>`):
 //   fit, zoom-in, zoom-out, zoom-100, export, clear, tab-1..9, select-<node id>,
 //   edit, compose-<node id>, note-<text, _ for spaces>, send, cancel, target-<terminal>,
-//   connect-<terminal>, pane, new, refresh
+//   connect-<terminal>, pane, new, refresh, open (the picked box's subsystem), up, split
 
 import { View, div, svg, PathBuilder } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { theme, settings, agents, panes, spaces, focused, props as given, knownAgents, exec, hc, run, home, notify, readTextFile, watchFolder, nextCommand, shared, setShared, window as host } from "herdr";
 import { parseFlowchart } from "./mermaid.js";
+import { ROOT, buildTree, trail } from "./tree.js";
 import { layoutSteps, at } from "./layout.js";
 import { checkoutOf, diagramDir, stateDir, hasDir, readMeta, updateMeta, isNews, load, pruneAll } from "./store.js";
 import { addButton, removeButton } from "./setup.js";
@@ -203,6 +210,7 @@ function diagramRules(lang) {
 - Draw only what the code has. If the project has no such thing (say, no database), tell me so in your reply and draw what plays that part instead, titled for what it really is (e.g. "Data files"), with plain boxes: a cylinder means a real database table.
 - Every box is a piece of the code, not a step of your task. Tie each box to it: \`%% code: <node id> <path>:<line>\`.
 - Mark progress: \`class <ids> done\` for finished parts, \`class <ids> active\` for work in progress, \`class <id> current\` for what you are on right now.
+- A box can stand for a subsystem drawn in a file of its own: \`%% subsystem: <node id> <file>.mmd\`. \`index.mmd\`, when there is one, is the root: the whole system at a glance. Link a new diagram from the box it details.
 - After each unit of work, update that file in place (change only what changed). Skip it when the flow did not change.`;
 }
 
@@ -221,6 +229,31 @@ function newPrompt(dir, request, lang, files) {
 Look at the code it is about, draw it as a Mermaid flowchart and save it as a new .mmd file in \`${dir}/\` (make the folder if it isn't there; a short kebab-case name).${taken} Blueprint opens it as a new tab as soon as it is saved.
 ${diagramRules(lang)}
 `);
+}
+
+// Break a diagram (or one box of it) into subsystems: each one drawn in a file
+// of its own and linked from its box, with index.mmd as the root. A diagram
+// broken up while there is no root becomes it (moved to index.mmd), so the
+// project has one overview rather than two.
+function splitPrompt(dir, G, n, note, lang, tree) {
+  const file = `${dir}/${G.key}`, title = G.g.title ?? G.tab;
+  const others = [...tree.files].filter((f) => f !== G.key);
+  const taken = others.length ? ` Don't overwrite ${others.map((f) => `\`${f}\``).join(", ")}.` : "";
+  const link = "link each box to its file with `%% subsystem: <node id> <file>.mmd` (the file name only)";
+  let ask;
+  if (n) {
+    const label = [n.title, n.sub].filter(Boolean).join(" ");
+    const where = n.line ? `, line ${n.line}: ${inline(n.lineText)}` : "";
+    const stands = n.ref ? ` It stands for \`${n.ref}\`.` : "";
+    ask = `In Blueprint I asked to break down the box "${label}" of the diagram '${title}' (\`${file}\`${where}) into a subsystem of its own.${stands} Draw what it is made of as a Mermaid flowchart in a new .mmd file in \`${dir}/\` (a short kebab-case name), and link the box to it: add \`%% subsystem: ${n.id} <file>.mmd\` to \`${file}\`.`;
+  } else if (G.key !== ROOT && !tree.files.has(ROOT)) {
+    ask = `In Blueprint I asked to break the diagram '${title}' (\`${file}\`) into subsystems, with \`${dir}/${ROOT}\` as the root. Move that file to \`${ROOT}\` and make it the whole system at a glance: one box per subsystem, joined by how they talk to each other. Draw each subsystem's detail in a new .mmd file in \`${dir}/\` (a short kebab-case name, e.g. \`auth.mmd\`), and ${link}.`;
+  } else {
+    const home = G.key !== ROOT && !tree.parents.has(G.key) ? ` Also link this diagram from the box in \`${dir}/${ROOT}\` it details (add one if none does).` : "";
+    ask = `In Blueprint I asked to break the diagram '${title}' (\`${file}\`) into subsystems. Keep that file as the overview of what it covers: one box per subsystem, joined by how they talk to each other. Draw each subsystem's detail in a new .mmd file in \`${dir}/\` (a short kebab-case name, e.g. \`auth.mmd\`), and ${link}.${home}`;
+  }
+  const extra = note ? `\n${note}` : "";
+  return clean(`${ask}${extra}\nDraw only subsystems the code really has; a box that is one small piece needs no file. Mark progress in the files as you go.${taken}\n${diagramRules(lang)}\n`);
 }
 
 const EMPTY = { nodes: new Map(), edges: [], title: null, dir: "LR" };
@@ -243,6 +276,7 @@ export default class Blueprint extends View {
     this.graphs = []; // the project's diagrams: { key (file), rev, tab, src, g, loaded }
     this.views = {}; // per diagram file: {z, x, y} once moved by hand; none means fit
     this.dirs = {}; // per diagram file: the direction last drawn
+    this.from = {}; // per subsystem file: the diagram it was last opened from
     this.measured = {}; // "n:<file@rev>:<id>" / "e:<file@rev>:<index>" -> {w, h} at 100%
     this.vers = {}; // per file@rev, bumped when its text is measured
     this.whole = new Set(); // file@revs whose text is all measured
@@ -426,6 +460,8 @@ export default class Blueprint extends View {
     this.graphs = [];
     this.views = {};
     this.dirs = {};
+    this.from = {};
+    this.expectSplit = null;
     this.measured = {};
     this.vers = {};
     this.whole.clear();
@@ -440,10 +476,10 @@ export default class Blueprint extends View {
   // lowered budget), the project looked up and its files read and parsed
   // again. Where the person was looking stays.
   refresh(cx) {
-    const views = { ...this.views }, dirs = this.dirs, graphs = this.graphs.map((d) => ({ ...d, src: null }));
+    const views = { ...this.views }, dirs = this.dirs, from = this.from, graphs = this.graphs.map((d) => ({ ...d, src: null }));
     const p = this.project, tab = this.ctxTab;
     this.forget();
-    Object.assign(this, { graphs, views: { ...views }, dirs, measuredFont: null, lite: 0, ctxPending: true });
+    Object.assign(this, { graphs, views: { ...views }, dirs, from, measuredFont: null, lite: 0, ctxPending: true });
     cx.spawn(async (cx) => {
       try {
         await this.reload(cx);
@@ -532,13 +568,15 @@ export default class Blueprint extends View {
     this.redraw(cx);
   }
 
-  // Files in a stable order (by name); a changed file gets a new rev, which
-  // re-measures it and starts its view from fit. The shown one stays shown,
-  // else the most recently updated one is.
+  // Files in a stable order (index.mmd, then by name); a changed file gets a
+  // new rev, which re-measures it and starts its view from fit. The shown one
+  // stays shown; if it went, the root does (say, a diagram moved to index.mmd),
+  // else the most recently updated one.
   setDiagrams(items) {
     const before = new Map(this.graphs.map((d) => [d.key, d]));
     const shown = this.graphs[this.tab]?.key;
-    this.graphs = [...items].sort((a, b) => a.file.localeCompare(b.file)).map((f) => {
+    const split = this.splitting();
+    this.graphs = [...items].sort((a, b) => (a.file === ROOT ? -1 : b.file === ROOT ? 1 : a.file.localeCompare(b.file))).map((f) => {
       const old = before.get(f.file);
       const rev = old && old.src === f.src ? old.rev : ++this.revs;
       if (old && rev !== old.rev) delete this.views[f.file];
@@ -546,15 +584,22 @@ export default class Blueprint extends View {
       return { key: f.file, rev, src: f.src, g, tab: g.title ?? f.file.replace(/\.mmd$/, ""), loaded: f.mtime };
     });
     const newest = items[0]?.file;
-    const i = this.graphs.findIndex((d) => d.key === shown);
-    this.tab = i >= 0 ? i : Math.max(0, this.graphs.findIndex((d) => d.key === newest));
+    const i = this.graphs.findIndex((d) => d.key === shown), root = this.graphs.findIndex((d) => d.key === ROOT);
+    this.tab = i >= 0 ? i : shown && root >= 0 ? root : Math.max(0, this.graphs.findIndex((d) => d.key === newest));
+    // A break-down asked for is done once its diagram opens a subsystem it
+    // didn't (or the picked box opens one). Meanwhile the new files don't take
+    // over the view, one after another.
+    if (split) {
+      const kids = this.nav.children.get(split.target) ?? [];
+      if (split.box ? kids.some((k) => k.id === split.box) : kids.length > split.before) this.expectSplit = null;
+    }
     // The diagram asked for with + has arrived: show it.
     const ask = this.asking();
     const arrived = ask ? this.graphs.findIndex((d) => !ask.known.has(d.key)) : -1;
     if (arrived >= 0) {
       this.tab = arrived;
       this.expectNew = null;
-    } else if (before.size && !this.selected && !this.compose) {
+    } else if (before.size && !this.selected && !this.compose && !split) {
       // A diagram the agent started on its own (say, for the feature it is
       // building now): show it, unless the person is busy with this one.
       const added = items.find((f) => !before.has(f.file));
@@ -563,10 +608,58 @@ export default class Blueprint extends View {
     // Another diagram on screen: what was picked or written was about the old one.
     if (this.graphs[this.tab]?.key !== shown) {
       this.selected = null;
-      if (this.compose?.id) this.compose = null;
+      if (this.compose?.id || this.compose?.kind === "split") this.compose = null;
     }
     if (this.selected && !this.graph.nodes.has(this.selected)) this.selected = null;
     if (this.compose?.id && !this.graph.nodes.has(this.compose.id)) this.compose = null;
+  }
+
+  // The diagrams' subsystem links, worked out once per list of diagrams.
+  get nav() {
+    if (this.tree?.of !== this.graphs) this.tree = buildTree(this.graphs);
+    return this.tree;
+  }
+
+  // The way down to file from a root, root first.
+  trailOf(file) {
+    return file ? trail(this.nav, file, this.from) : [];
+  }
+
+  // The file the box opens, if it is here.
+  subOf(n) {
+    const f = n?.system;
+    return f && f !== this.vkey && this.nav.files.has(f) ? f : null;
+  }
+
+  showFile(file, cx) {
+    const i = this.graphs.findIndex((d) => d.key === file);
+    if (i >= 0) this.setTab(i, cx);
+  }
+
+  // Into the subsystem the box opens; the way back up goes through here.
+  openSub(n, cx) {
+    const file = this.subOf(n);
+    if (!file) return;
+    this.from[file] = this.vkey;
+    this.showFile(file, cx);
+  }
+
+  up(cx) {
+    const path = this.trailOf(this.vkey);
+    if (path.length > 1) this.showFile(path[path.length - 2], cx);
+  }
+
+  // The tab row's k-th diagram.
+  setNth(k, cx) {
+    const file = this.nav.order[k];
+    if (file) this.showFile(file, cx);
+  }
+
+  // A break-down asked for in this project and not done yet.
+  splitting() {
+    const s = this.expectSplit;
+    if (s && Date.now() - s.since > ASK_WAIT) this.expectSplit = null;
+    return this.expectSplit && this.expectSplit.dir === this.project?.dir ? this.expectSplit : null;
   }
 
   // A diagram asked for with + in this project, not here yet.
@@ -949,7 +1042,10 @@ export default class Blueprint extends View {
       setUpdateCheck(true);
       this.lookForUpdate(cx);
     }
-    else if (/^tab-\d$/.test(c)) this.setTab(Number(c.slice(4)) - 1, cx);
+    else if (/^tab-\d$/.test(c)) this.setNth(Number(c.slice(4)) - 1, cx);
+    else if (c === "open") this.openSub(this.graph.nodes.get(this.selected), cx);
+    else if (c === "up") this.up(cx);
+    else if (c === "split") this.openSplit();
     else if (c.startsWith("select-")) this.selected = c.slice(7);
     else if (c === "edit") this.editKey();
     else if (c.startsWith("compose-")) this.openCompose(c.slice(8));
@@ -1057,6 +1153,21 @@ export default class Blueprint extends View {
     this.input.focus();
   }
 
+  // B (and the header button): ask the agent to break the shown diagram, or
+  // the picked box, into subsystems. The note is optional.
+  openSplit() {
+    if (!this.project || !this.graphs[this.tab]) return;
+    const id = this.selected && this.graph.nodes.has(this.selected) ? this.selected : null;
+    this.editing = false;
+    if (this.compose?.kind !== "split" || this.compose.id !== id) {
+      this.input.set_value("");
+      this.noteEmpty = true;
+    }
+    this.compose = { kind: "split", id };
+    this.input.focus();
+    if (id) this.keepAbove(id);
+  }
+
   closeCompose() {
     this.compose = null;
     this.focus.focus();
@@ -1067,18 +1178,21 @@ export default class Blueprint extends View {
   send(cx) {
     if (this.sending || !this.compose) return;
     const note = this.input.value().trim();
-    const fresh = this.compose.kind === "new";
-    const n = fresh ? null : this.graph.nodes.get(this.compose.id);
-    if (!note || (!fresh && !n) || !this.project) return;
+    const fresh = this.compose.kind === "new", split = this.compose.kind === "split";
+    const n = this.compose.id ? this.graph.nodes.get(this.compose.id) : null;
+    const G = this.graphs[this.tab];
+    if ((!note && !split) || (!fresh && !split && !n) || (split && (!G || (this.compose.id && !n))) || !this.project) return;
     const target = this.pickTarget(this.targets());
     if (!target) {
       notify({ title: this.T.noTarget, body: this.T.noAgentBody, level: "warning", timeout: 4000 });
       return;
     }
     const p = this.project;
+    const tree = this.nav;
     const text = fresh
       ? newPrompt(p.dir, note, this.lang, this.graphs.map((d) => d.key))
-      : pointPrompt(this.graphs[this.tab], n, note, `${this.project.dir}/${this.vkey}`);
+      : split ? splitPrompt(p.dir, G, n, note, this.lang, tree)
+      : pointPrompt(G, n, note, `${this.project.dir}/${this.vkey}`);
     this.sending = true;
     this.redraw(cx);
     cx.spawn(async (cx) => {
@@ -1089,9 +1203,16 @@ export default class Blueprint extends View {
         }
         const r = await hc(["send", target.address, text]);
         if (r.code !== 0) throw new Error((r.stderr || r.stdout || `hc send ${r.code}`).trim());
-        notify({ title: this.T.sent(target.name), body: fresh ? note : `${n.title}: ${note}`, level: "success", timeout: 4000 });
+        const what = split ? (n ? this.T.splitBox(n.title) : this.T.splitTitle) : fresh ? note : `${n.title}: ${note}`;
+        notify({ title: this.T.sent(target.name), body: what, level: "success", timeout: 4000 });
         // A new diagram: wait for a file that isn't there yet, then show it.
         if (fresh) this.expectNew = { dir: p.dir, known: new Set(this.graphs.map((d) => d.key)), since: Date.now(), label: note };
+        // A break-down: done once its diagram (or index.mmd, when the diagram
+        // becomes the root) opens a subsystem it didn't.
+        if (split) {
+          const target = !n && G.key !== ROOT && !tree.files.has(ROOT) ? ROOT : G.key;
+          this.expectSplit = { dir: p.dir, target, box: n?.id ?? null, before: tree.children.get(target)?.length ?? 0, since: Date.now() };
+        }
         // Sent: watch the whole drawing change, not only the picked box's flow
         // (boxes the agent adds would be dimmed).
         this.selected = null;
@@ -1129,8 +1250,10 @@ export default class Blueprint extends View {
 
   // Edit mode: a click opens the composer. Otherwise it picks the node (its
   // flow lights up) or, on the picked one, lets go.
-  clickNode(n) {
+  // A double-click on a box with a subsystem opens it.
+  clickNode(n, count = 1, cx) {
     if (this.editing) this.openCompose(n.id);
+    else if (count >= 2 && this.subOf(n)) this.openSub(n, cx);
     else this.selected = this.selected === n.id ? null : n.id;
   }
 
@@ -1284,11 +1407,14 @@ export default class Blueprint extends View {
           else this.selected = null;
         } else if (this.typing) return; // letters belong to the composer
         else if (k === "e") this.editKey();
+        else if (k === "b") this.openSplit();
+        else if (k === "enter" && this.subOf(this.graph.nodes.get(this.selected))) this.command("open", cx);
+        else if (k === "backspace" && this.trailOf(this.vkey).length > 1) this.up(cx);
         else if (k === "f") this.command("fit", cx);
         else if (k === "0") this.command("zoom-100", cx);
         else if (k === "=" || k === "shift-=") this.command("zoom-in", cx);
         else if (k === "-") this.command("zoom-out", cx);
-        else if (/^[1-9]$/.test(k)) this.setTab(Number(k) - 1, cx);
+        else if (/^[1-9]$/.test(k)) this.setNth(Number(k) - 1, cx);
         else return;
         cx.stop_propagation();
         this.redraw(cx);
@@ -1317,7 +1443,7 @@ export default class Blueprint extends View {
     return this.iconButton(t, "bp-refresh", "refresh.svg", this.T.refreshTip, false, (cx) => this.refresh(cx));
   }
 
-  // Title, the agent, and three icon buttons (refresh, open as pane, edit).
+  // Title, the agent, and four icon buttons (refresh, open as pane, break into subsystems, edit).
   header(t, pal, G, narrow) {
     const T = this.T;
     const icon = (...a) => this.iconButton(t, ...a);
@@ -1347,38 +1473,44 @@ export default class Blueprint extends View {
       .child(div().mr(4).child(pill))
       .child(this.refreshButton(t))
       .when(this.inPanel, (el) => el.child(icon("bp-pane", "pane.svg", T.openPane, false, () => this.openPane())))
+      .when(!!G, (el) => el.child(icon("bp-split", "layers.svg", T.splitTip, this.compose?.kind === "split", () => this.openSplit())))
       .when(!!G, (el) => el.child(icon("bp-edit", "edit.svg", T.editTip, this.editing, () => this.editKey())));
   }
 
-  // The parts of the project: one tab per diagram (always, even one), + to
-  // ask for another right after them, and the shown diagram's age at the far
-  // end. The project itself is the header's title.
+  // The parts of the project: one tab per diagram (always, even one), in
+  // tree order (a subsystem after the diagram that opens it), + to ask for
+  // another right after them, and the shown diagram's age at the far end. The
+  // project itself is the header's title.
   tabs(t) {
     const p = this.project, G = this.graphs[this.tab];
     this.rowH = TABS_H;
+    const list = this.nav.order.map((f) => this.graphs.find((d) => d.key === f)).filter(Boolean);
+    const busy = (this.asking() ? 96 : 0) + (this.splitting() ? 120 : 0);
     // A tab is as wide as its title, up to TAB_MAX; a longer title ends in "…"
     // and shows whole in the tooltip. When the tabs don't fit, the longest
     // ones narrow together (short ones keep their size), down to TAB_MIN.
     const age = G ? this.T.ago(minutesSince(G.loaded)) : "";
-    const room = this.width - 20 - (p ? 32 : 0) - (this.asking() ? 96 : 0) - (G ? estimate(age, 11.5) + 16 : 0);
-    const natural = this.graphs.map((d) => estimate(d.tab, 12) + 22 + 4);
+    const room = this.width - 20 - (p ? 32 : 0) - busy - (G ? estimate(age, 11.5) + 16 : 0);
+    const natural = list.map((d) => estimate(d.tab, 12) + 22 + 4);
     const tabMax = this.width > 0 ? tabCap(natural, room, TAB_MIN, TAB_MAX) : TAB_MAX;
     return h_flex().h(TABS_H).flex_none().px(10).gap(4).items_center().border_b(1).border_color(t.border).overflow_hidden()
-      .children(this.graphs.map((d, i) => {
-        const on = i === this.tab;
+      .children(list.map((d, i) => {
+        const on = d.key === G?.key;
         return h_flex().id(`bp-tab-${i}`).flex_none().max_w(tabMax).h(26).gap(5).px(10).items_center().rounded(6).text_size(12)
           .border_1().border_color(on ? t.input : t.border).tooltip(d.tab)
           .cursor_pointer().text_color(on ? t.foreground : t.muted)
           .when(on, (el) => el.bg(t.raised))
           .when(!on, (el) => el.hover((s) => s.bg(t.hover).text_color(t.foreground)))
           .on_click((_e, cx) => {
-            this.setTab(i, cx);
+            this.showFile(d.key, cx);
             this.redraw(cx);
           })
           .child(div().min_w(0).truncate().child(d.tab));
       }))
       .when(!!this.asking(), (el) => el.child(div().flex_none().px(10).py(4).rounded(6).text_size(12).text_color(t.dim)
         .border(1).border_color(t.border).child(this.T.drawingNew)))
+      .when(!!this.splitting(), (el) => el.child(div().flex_none().px(10).py(4).rounded(6).text_size(12).text_color(t.dim)
+        .border(1).border_color(t.border).child(this.T.splitting)))
       .when(!!p, (el) => el.child(div().id("bp-new").flex_none().size(26).ml(2).flex().items_center().justify_center().rounded(6)
         .cursor_pointer().tooltip(this.T.newTip).text_color(this.compose?.kind === "new" ? t.accent : t.muted)
         .hover((s) => s.bg(t.hover).text_color(t.foreground))
@@ -1466,12 +1598,41 @@ export default class Blueprint extends View {
         .child(div().text_size(12).text_color(t.dim).child(failed ? this.T.drawFailed : this.T.laying))
         .when(!!failed, (el) => el.child(this.refreshButton(t))));
     }
+    const path = this.trailOf(this.vkey);
     return el.children(els)
-      .when(this.editing, (el) => el.child(h_flex().absolute().left(12).top(12).gap(6).px(10).h(26).items_center().rounded(6)
+      .when(path.length > 1, (el) => el.child(this.crumbs(t, path)))
+      .when(this.editing, (el) => el.child(h_flex().absolute().left(12).top(path.length > 1 ? 46 : 12).gap(6).px(10).h(26).items_center().rounded(6)
         .bg(alpha(t.accent, 0.16)).border(1).border_color(alpha(t.accent, 0.5)).text_size(12).text_color(t.accent)
         .child(div().font_semibold().child(this.T.editMode))
         .child(div().text_color(t.muted).child(this.compose ? this.T.enterSend : this.T.pickNode))))
       .when(!!this.compose, (el) => el.child(this.composer(t)));
+  }
+
+  // Inside a subsystem: the way down from its tab, each step a way back up.
+  crumbs(t, path) {
+    const name = (f) => this.graphs.find((d) => d.key === f)?.tab ?? f.replace(/\.mmd$/, "");
+    let row = h_flex().id("bp-crumbs").absolute().left(12).top(12).max_w(Math.max(120, this.size.width - 24)).h(26).pl(2).pr(8).gap(4)
+      .items_center().rounded(6).bg(t.background).border(1).border_color(t.border).text_size(12).overflow_hidden().cursor_default()
+      .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+      .child(div().id("bp-up").flex_none().size(22).flex().items_center().justify_center().rounded(4).text_color(t.muted)
+        .cursor_pointer().tooltip(this.T.upTip).hover((s) => s.bg(t.hover).text_color(t.foreground))
+        .on_click((_e, cx) => {
+          this.up(cx);
+          this.redraw(cx);
+        })
+        .child("←"));
+    path.forEach((f, i) => {
+      const last = i === path.length - 1;
+      if (i) row = row.child(div().flex_none().text_color(t.dim).child("›"));
+      row = row.child(div().id(`bp-crumb-${i}`).min_w(0).truncate().text_color(last ? t.foreground : t.muted)
+        .when(last, (el) => el.font_semibold().flex_none())
+        .when(!last, (el) => el.cursor_pointer().hover((s) => s.text_color(t.foreground)).on_click((_e, cx) => {
+          this.showFile(f, cx);
+          this.redraw(cx);
+        }))
+        .child(name(f)));
+    });
+    return row;
   }
 
   // No diagram yet: the agents in the tab, to connect one and have it draw.
@@ -1509,9 +1670,9 @@ export default class Blueprint extends View {
 
   // The request box: which node, who gets it, what to change.
   composer(t) {
-    const fresh = this.compose.kind === "new";
-    const n = fresh ? null : this.graph.nodes.get(this.compose.id);
-    if (!fresh && !n) return div();
+    const fresh = this.compose.kind === "new", split = this.compose.kind === "split";
+    const n = this.compose.id ? this.graph.nodes.get(this.compose.id) : null;
+    if ((!fresh && !split && !n) || (split && this.compose.id && !n)) return div();
     const list = this.targetList ?? [], target = this.pickTarget(list);
     const W = this.size.width, cw = Math.min(560, W - 24);
     const button = (id, label, primary, enabled, onClick) =>
@@ -1531,11 +1692,12 @@ export default class Blueprint extends View {
       this.target = list[(i + 1) % list.length].address;
     };
     const ready = !!target && !this.sending;
+    const title = split ? (n ? this.T.splitBox(n.title) : this.T.splitTitle) : fresh ? this.T.newDiagram : n.title;
     return v_flex().id("bp-compose").absolute().left((W - cw) / 2).bottom(12).w(cw).p(12).gap(8).rounded(10)
       .bg(t.popover).border(1).border_color(alpha(t.accent, 0.6)).shadow_lg().cursor_default()
       .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
       .child(h_flex().gap(8).items_center()
-        .child(div().flex_none().text_size(12.5).font_semibold().text_color(t.foreground).child(fresh ? this.T.newDiagram : n.title))
+        .child(div().flex_none().text_size(12.5).font_semibold().text_color(t.foreground).child(title))
         .when(!!n?.ref, (el) => el.child(div().min_w(0).truncate().text_size(11).font_family(this.mono).text_color(t.muted).child(n.ref)))
         .child(div().flex_1())
         .child(div().id("bp-target").flex_none().px(8).h(22).flex().items_center().rounded(6).text_size(11.5)
@@ -1546,7 +1708,7 @@ export default class Blueprint extends View {
         .child(Input.new(this.input).h(34).px(10).rounded(8).border(1).border_color(this.typing ? t.accent : t.input)
           .bg(t.background).text_size(13).text_color(t.foreground))
         .when(this.noteEmpty, (el) => el.child(div().absolute().left(11).top(0).h(34).flex().items_center()
-          .text_size(13).text_color(t.dim).child(fresh ? this.T.newPlaceholder : this.T.placeholder))))
+          .text_size(13).text_color(t.dim).child(split ? this.T.splitPlaceholder : fresh ? this.T.newPlaceholder : this.T.placeholder))))
       // Starting points for a new diagram; a click fills the box.
       .when(fresh, (el) => el.child(h_flex().gap(6).flex_wrap().children(this.T.suggest.map((x, i) =>
         div().id(`bp-suggest-${i}`).px(8).h(24).flex().items_center().rounded(6).border(1).border_color(t.input)
@@ -1560,7 +1722,7 @@ export default class Blueprint extends View {
           .child(x)))))
       .child(h_flex().gap(8).items_center()
         .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim)
-          .child(!target ? this.T.openAgent : fresh ? this.T.newHint : this.T.sendsWith))
+          .child(!target ? this.T.openAgent : split ? this.T.splitHint : fresh ? this.T.newHint : this.T.sendsWith))
         .child(button("bp-cancel", this.T.cancel, false, true, () => this.closeCompose()))
         .child(button("bp-send", this.sending ? this.T.sending : this.T.send, true, ready, (cx) => this.send(cx))));
   }
@@ -1811,8 +1973,8 @@ export default class Blueprint extends View {
         this.hovered = on ? n.id : this.hovered === n.id ? null : this.hovered;
         this.redraw(cx);
       })
-      .on_click((_e, cx) => {
-        this.clickNode(n);
+      .on_click((e, cx) => {
+        this.clickNode(n, e?.click_count ?? 1, cx);
         this.redraw(cx);
       });
     const full = (path, color) => div().absolute().left(0).top(0).w(w).h(h).child(window.paint_path(path, color));
@@ -1845,6 +2007,27 @@ export default class Blueprint extends View {
     box = box.child(label);
 
     const out = [box];
+    // A box that opens a subsystem: a second card behind it (box shapes) and
+    // a corner badge that opens it.
+    const sub = this.exporting ? null : this.subOf(n);
+    if (sub) {
+      const op = lit ? 1 : 0.28, o = 4 * z;
+      if (n.shape !== "diamond" && n.shape !== "cylinder") {
+        const r = n.shape === "stadium" ? h / 2 : n.shape === "circle" ? w / 2 : n.shape === "round" ? 14 * z : 8 * z;
+        out.unshift(div().absolute().left(left + o).top(top + o).w(w).h(h).rounded(r).bg(bg).border(1).border_color(t.input).opacity(op));
+      }
+      const d = Math.max(16, 20 * z), bx = X(item.x) + w / 2 - d * 0.6, by = Y(item.y) + h / 2 - d * 0.6;
+      const title = this.graphs.find((x) => x.key === sub)?.tab ?? sub;
+      out.push(div().id(`bp-open-${this.tab}-${n.id}`).absolute().left(bx).top(by).size(d).flex().items_center().justify_center()
+        .rounded(5).bg(t.raised).border(1).border_color(t.input).text_color(t.muted).opacity(op).cursor_pointer()
+        .tooltip(this.T.openTip(title)).hover((s) => s.border_color(t.accent).text_color(t.accent))
+        .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+        .on_click((_e, cx) => {
+          this.openSub(n, cx);
+          this.redraw(cx);
+        })
+        .child(svg("mods/blueprint/layers.svg").size(d * 0.6)));
+    }
     if (picked) {
       // A soft ring outside the selected node.
       const g = 4;
@@ -1901,11 +2084,13 @@ export default class Blueprint extends View {
       .child(div().id("bp-zoom-in").w(24).h_full().flex().items_center().justify_center().cursor_pointer().hover((s) => s.bg(t.hover))
         .on_click((_e, cx) => { this.command("zoom-in", cx); this.redraw(cx); }).child("+"));
     const mono = this.mono;
+    const sub = this.subOf(n);
     const info = n
       ? h_flex().flex_1().min_w(0).gap(8).items_center().overflow_hidden()
         .child(div().flex_none().text_size(12).font_semibold().text_color(t.foreground).child(n.title))
         .when(!!n.ref, (el) => el.child(div().min_w(0).truncate().text_size(11).font_family(mono).text_color(t.accent).child(n.ref)))
-        .when(!narrow && !this.editing, (el) => el.child(div().flex_none().text_size(11).text_color(t.dim).child(this.T.hintEdit)))
+        .when(!!sub, (el) => el.child(button("bp-open", `${this.T.openSub} ↵`, (cx) => this.openSub(n, cx), (e) => e.flex_none().h(22).px(8))))
+        .when(!narrow && !this.editing, (el) => el.child(div().flex_none().text_size(11).text_color(t.dim).child(sub ? this.T.hintSub : this.T.hintEdit)))
       : div().flex_1().min_w(0).truncate().text_size(12).text_color(t.muted)
         .child(this.cut ? this.T.partial : this.editing ? this.T.hintEditing : narrow ? this.T.hintNarrow : this.T.hint);
     return h_flex().h(FOOTER_H).flex_none().px(12).gap(6).items_center().border_t(1).border_color(t.border)
