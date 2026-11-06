@@ -8,7 +8,9 @@
   <img src="https://img.shields.io/badge/agents-Claude%20Code%20%7C%20Codex%20%7C%20Gemini%20%7C%20Grok%20%7C%20OpenCode-6e40c9" alt="Claude Code, Codex, Gemini, Grok, OpenCode">
 </p>
 
-<p align="center">Using the Herdr TUI in a terminal? You want <a href="https://github.com/chappse6/herdr-blueprint">herdr-blueprint</a>, the plugin for it.</p>
+<p align="center">A fork of <a href="https://github.com/chappse6/herdr-blueprint-app">herdr-blueprint-app</a> by <a href="https://github.com/chappse6">chappse6</a>, used under the MIT License. See <a href="#credits">Credits</a>.</p>
+
+<p align="center">Using the Herdr TUI in a terminal? You want <a href="https://github.com/chappse6/herdr-blueprint">herdr-blueprint</a>, chappse6's plugin for it.</p>
 
 <p align="center">
   <img src="docs/media/point-and-ask.gif" alt="Blueprint above Claude Code shows POST /login. The box 'argon2 verify' is picked, E opens a request box, 'lock the account for 15 minutes after 5 wrong passwords' is sent, the new boxes 'locked?', '429 locked' and 'Redis login_fail' appear in yellow while Claude Code builds them, then turn into checked boxes.">
@@ -31,7 +33,7 @@ Blueprint is a mod for the [Herdr](https://herdr.dev) desktop app. Your agent dr
 Run an agent inside Herdr and ask it:
 
 ```
-Add the Herdr mod from https://github.com/chappse6/herdr-blueprint-app, then open it and add its tab bar button
+Add the Herdr mod from https://github.com/jtaylorcpp/herdr-blueprint-repo-app, then open it and add its tab bar button
 ```
 
 Herdr's `AGENTS.md` tells the agent what to do: copy `mods/blueprint` into your Herdr app folder and check it. By hand, copy `mods/blueprint` into the `mods` folder there (`~/.config/herdr-app/mods/` on macOS) and run `herdr-app check ~/.config/herdr-app/mods/blueprint`.
@@ -128,6 +130,10 @@ Tests run in Node 24 or newer, with Herdr's modules stubbed: `node --import ./te
 
 `scripts/sync.sh` copies `mods/blueprint` into the Herdr app folder (Herdr doesn't reload a symlinked mod), and `--watch` copies on every change. `scripts/demo/` rebuilds the pictures on this page from a real session in a Herdr window of its own: `start.sh`, then `record.py` while you drive it, then `make.py clips.json`. `scripts/bench.sh` draws a generated diagram of 100 to 500 boxes once in Herdr's own engine, which cuts off a render after about 50 ms, and prints how long it took. `RECIPE.md` describes the mod for an agent that wants to build it from scratch.
 
+## Credits
+
+Blueprint for Herdr was created by [chappse6](https://github.com/chappse6). This repository is a fork of their [herdr-blueprint-app](https://github.com/chappse6/herdr-blueprint-app). The design, the code and the docs up to the fork are their work. Thanks to them and to everyone who contributed to the original project.
+
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE). The original copyright notice is kept as the license requires.

@@ -10,8 +10,8 @@
 import { appHome, readTextFile, shared, setShared } from "herdr";
 import { slashes } from "./store.js";
 
-export const REPO = "https://github.com/chappse6/herdr-blueprint-app";
-const REMOTE = "https://raw.githubusercontent.com/chappse6/herdr-blueprint-app/master/mods/blueprint/mod.json";
+export const REPO = "https://github.com/jtaylorcpp/herdr-blueprint-repo-app";
+const REMOTE = "https://raw.githubusercontent.com/jtaylorcpp/herdr-blueprint-repo-app/master/mods/blueprint/mod.json";
 const KEY = "blueprint.update";
 const DAY = 86400000, HOUR = 3600000;
 

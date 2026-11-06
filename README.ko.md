@@ -2,7 +2,9 @@
 
 <p align="center"><b>코딩 에이전트가 만들고 있는 코드를 바로 옆에서 다이어그램으로 봅니다.</b></p>
 
-<p align="center">터미널에서 Herdr TUI를 쓰신다면 그쪽용 플러그인 <a href="https://github.com/chappse6/herdr-blueprint">herdr-blueprint</a>를 보세요.</p>
+<p align="center"><a href="https://github.com/chappse6">chappse6</a>님의 <a href="https://github.com/chappse6/herdr-blueprint-app">herdr-blueprint-app</a>을 MIT 라이선스에 따라 포크한 저장소입니다. <a href="#크레딧">크레딧</a>을 참고하세요.</p>
+
+<p align="center">터미널에서 Herdr TUI를 쓰신다면 chappse6님이 만든 그쪽용 플러그인 <a href="https://github.com/chappse6/herdr-blueprint">herdr-blueprint</a>를 보세요.</p>
 
 <p align="center">
   <img src="docs/media/point-and-ask.gif" alt="위에 Blueprint, 아래에 Claude Code. POST /login의 'argon2 verify' 박스를 고르고 E로 'lock the account for 15 minutes after 5 wrong passwords'를 보내면, 'locked?', '429 locked', 'Redis login_fail' 박스가 노란색으로 나타났다가 Claude Code가 다 만들면 체크로 바뀝니다.">
@@ -23,7 +25,7 @@ Blueprint는 [Herdr](https://herdr.dev) 데스크톱 앱용 mod입니다. 에이
 Herdr 안에서 에이전트를 띄우고 이렇게 부탁하세요.
 
 ```
-https://github.com/chappse6/herdr-blueprint-app 에 있는 Herdr mod를 추가하고, 열어서 탭바 버튼까지 달아 줘
+https://github.com/jtaylorcpp/herdr-blueprint-repo-app 에 있는 Herdr mod를 추가하고, 열어서 탭바 버튼까지 달아 줘
 ```
 
 에이전트는 Herdr의 `AGENTS.md`에 적힌 대로 `mods/blueprint`를 앱 폴더에 복사하고 확인합니다. 직접 하려면 `mods/blueprint`를 앱 폴더의 `mods` 아래(macOS는 `~/.config/herdr-app/mods/`)에 복사하고 `herdr-app check ~/.config/herdr-app/mods/blueprint`를 실행하세요.
@@ -120,6 +122,10 @@ Blueprint 버튼(설치 참고)을 누르면 지금 보고 있는 탭을 따라�
 
 `scripts/sync.sh`는 `mods/blueprint`를 Herdr 앱 폴더로 복사합니다(심볼릭 링크로 연결한 mod는 Herdr가 다시 읽지 않습니다). `--watch`를 붙이면 바뀔 때마다 복사합니다. `scripts/demo/`는 이 페이지의 그림을 실제 세션으로 다시 만듭니다. 따로 띄운 Herdr 창에서 `start.sh`로 시작하고, 조작하는 동안 `record.py`로 녹화한 뒤 `make.py clips.json`을 실행합니다. `scripts/bench.sh`는 상자 100~500개짜리 다이어그램을 만들어 Herdr 엔진에서 한 번 그리고 걸린 시간을 보여 줍니다. Herdr는 50ms쯤 넘는 렌더를 끊기 때문에, 큰 다이어그램이 그 안에 그려지는지 여기서 봅니다. `RECIPE.md`에는 에이전트가 처음부터 다시 만들 때 쓸 설명이 있습니다.
 
+## 크레딧
+
+Blueprint for Herdr는 [chappse6](https://github.com/chappse6)님이 만들었습니다. 이 저장소는 그분의 [herdr-blueprint-app](https://github.com/chappse6/herdr-blueprint-app)을 포크한 것이고, 포크 시점까지의 설계, 코드와 문서는 모두 그분의 작업입니다. 원작자와 원래 프로젝트에 기여한 모든 분께 감사드립니다.
+
 ## 라이선스
 
-MIT
+MIT. [LICENSE](LICENSE)를 보세요. 라이선스가 요구하는 대로 원래 저작권 표시를 그대로 두었습니다.
